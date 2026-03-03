@@ -93,38 +93,38 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
-
+      
           TARGET="${{ github.event.inputs.target }}"
           BASE_NAME="${{ github.event.inputs.base_image_name }}"
           BASE_SHA="${{ github.event.inputs.base_image_sha }}"
-
+      
           for repo in $REPOS; do
             NAME=$(basename "$repo")
             SHOULD_TRIGGER=false
-
-            # Base repos: names starting with base- and ending with -image (except base-python-image)
+      
+            # Base repos
             if [[ "$TARGET" == "base" && "$NAME" =~ ^base-.*-image$ && "$NAME" != "base-python-image" ]]; then
               SHOULD_TRIGGER=true
             fi
-
-            # User repos: contain '-image' anywhere, but not base-*-image
+      
+            # User repos
             if [[ "$TARGET" == "user" && "$NAME" =~ -image && ! "$NAME" =~ ^base-.*-image$ ]]; then
               SHOULD_TRIGGER=true
             fi
-
+      
             if [[ "$SHOULD_TRIGGER" == "true" ]]; then
               echo "Triggering downstream workflow for $repo"
-
-              # Prepare JSON payload
+      
+              # Full JSON body including event_type
               PAYLOAD=$(jq -n \
                 --arg name "$BASE_NAME" \
                 --arg sha "$BASE_SHA" \
-                '{base_image_name: $name,
-                  base_image_sha: $sha}')
-
+                '{event_type: "base-image-updated",
+                  client_payload: {base_image_name: $name, base_image_sha: $sha}}')
+      
+              # Post repository_dispatch
               echo "$PAYLOAD" | gh api -X POST "/repos/$repo/dispatches" \
                 -H "Accept: application/vnd.github.v3+json" \
-                --input - \
-                -F event_type=base-image-updated
+                --input -
             fi
           done
