@@ -11,53 +11,76 @@ on:
           - base
           - user
       base_image_name:
-        description: "Base image name"
+        description: "Base image name (e.g. ucb-datahub-2018/testing/base-python-image)"
         required: true
       base_image_sha:
-        description: "Base image SHA"
+        description: "Base image SHA/tag to propagate"
         required: true
 
+permissions:
+  contents: read
+
 jobs:
-  discover-and-trigger:
+  trigger-downstreams:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY_SECRET }}
+          owner: ${{ github.repository_owner }}
+
       - name: Discover repos using base image
         env:
-          GH_TOKEN: ${{ secrets.PAT }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          QUERY="org:YOUR_ORG \"FROM us-central1-docker.pkg.dev/${{ github.event.inputs.base_image_name }}\""
+          echo "Searching for repos that use base image: ${{ github.event.inputs.base_image_name }}"
 
-          REPOS=$(gh api \
-            search/code \
-            -f q="$QUERY" \
-            --jq '.items[].repository.full_name' | sort -u)
+          # GitHub code search query to find Dockerfiles referencing base image
+          QUERY="org:${{ github.repository_owner }} \"FROM us-central1-docker.pkg.dev/${{ github.event.inputs.base_image_name }}\""
+
+          # Fetch repos dynamically
+          REPOS=$(gh api search/code -f q="$QUERY" --jq '.items[].repository.full_name' | sort -u)
+
+          if [ -z "$REPOS" ]; then
+            echo "No downstream repos found using base image. Exiting."
+            exit 0
+          fi
 
           echo "Discovered repos:"
           echo "$REPOS"
+          echo "REPOS<<EOF" >> $GITHUB_ENV
+          echo "$REPOS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
+      - name: Trigger downstream workflows
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
           for repo in $REPOS; do
             NAME=$(basename $repo)
 
             if [[ "${{ github.event.inputs.target }}" == "base" ]]; then
               if [[ "$NAME" =~ ^base-.*-image$ ]] && [[ "$NAME" != "base-python-image" ]]; then
-                echo "Triggering BASE downstream: $repo"
+                echo "Triggering BASE downstream workflow for $repo"
 
                 gh api \
                   -X POST /repos/$repo/dispatches \
                   -F event_type=update-base-image \
-                  -F client_payload="{\"base_image_name\":\"${{ github.event.inputs.base_image_name }}\",\"base_image_sha\":\"${{ github.event.inputs.base_image_sha }}\"}"
+                  -F client_payload="{\"base_image_name\":\"${{ github.event.inputs.base_image_name }}\",\"base_image_sha\":\"${{ github.event.inputs.base_image_sha }}\",\"workflow_type\":\"base\"}"
               fi
             fi
 
             if [[ "${{ github.event.inputs.target }}" == "user" ]]; then
               if [[ ! "$NAME" =~ ^base-.*-image$ ]]; then
-                echo "Triggering USER downstream: $repo"
+                echo "Triggering USER downstream workflow for $repo"
 
                 gh api \
                   -X POST /repos/$repo/dispatches \
                   -F event_type=update-base-image \
-                  -F client_payload="{\"base_image_name\":\"${{ github.event.inputs.base_image_name }}\",\"base_image_sha\":\"${{ github.event.inputs.base_image_sha }}\"}"
+                  -F client_payload="{\"base_image_name\":\"${{ github.event.inputs.base_image_name }}\",\"base_image_sha\":\"${{ github.event.inputs.base_image_sha }}\",\"workflow_type\":\"user\"}"
               fi
             fi
           done
