@@ -31,7 +31,7 @@ jobs:
           app-id: ${{ vars.APP_ID }}
           private-key: ${{ secrets.PRIVATE_KEY_SECRET }}
           owner: ${{ github.repository_owner }}
-
+          
       - name: Discover repos using base image
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -42,7 +42,6 @@ jobs:
           BASE_IMAGE="${{ github.event.inputs.base_image_name }}"
 
           echo "Listing repositories in $ORG..."
-
           REPOS=$(gh repo list "$ORG" \
             --limit 500 \
             --json nameWithOwner \
@@ -53,15 +52,17 @@ jobs:
           for repo in $REPOS; do
             echo "Checking $repo..."
 
-            # Try to fetch Dockerfile metadata first
+            # Skip if Dockerfile does not exist
             if ! gh api "repos/$repo/contents/Dockerfile" >/dev/null 2>&1; then
               echo "  No Dockerfile — skipping"
               continue
             fi
 
+            # Fetch and decode Dockerfile content
             CONTENT=$(gh api "repos/$repo/contents/Dockerfile" \
               --jq '.content' | base64 -d)
 
+            # Check if Dockerfile uses the base image
             if echo "$CONTENT" | grep -q "$BASE_IMAGE"; then
               echo "  Uses base image"
               MATCHING_REPOS="$MATCHING_REPOS"$'\n'"$repo"
@@ -78,12 +79,14 @@ jobs:
           echo "Discovered repos:"
           echo "$MATCHING_REPOS"
 
+          # Save matching repos to GitHub Actions environment
           {
             echo "REPOS<<EOF"
             echo "$MATCHING_REPOS"
             echo "EOF"
           } >> "$GITHUB_ENV"
 
+  
       - name: Trigger downstream workflows
         if: env.REPOS != ''
         env:
@@ -97,34 +100,31 @@ jobs:
 
           for repo in $REPOS; do
             NAME=$(basename "$repo")
-
             SHOULD_TRIGGER=false
 
-            if [[ "$TARGET" == "base" ]]; then
-              if [[ "$NAME" =~ ^base-.*-image$ && "$NAME" != "base-python-image" ]]; then
-                SHOULD_TRIGGER=true
-                WORKFLOW_TYPE="base"
-              fi
+            # Base repos: names starting with base- and ending with -image (except base-python-image)
+            if [[ "$TARGET" == "base" && "$NAME" =~ ^base-.*-image$ && "$NAME" != "base-python-image" ]]; then
+              SHOULD_TRIGGER=true
             fi
 
-            if [[ "$TARGET" == "user" && \
-                  "$NAME" =~ -image && \
-                  ! "$NAME" =~ ^base-.*-image$ ]]; then
+            # User repos: contain '-image' anywhere, but not base-*-image
+            if [[ "$TARGET" == "user" && "$NAME" =~ -image && ! "$NAME" =~ ^base-.*-image$ ]]; then
               SHOULD_TRIGGER=true
             fi
 
             if [[ "$SHOULD_TRIGGER" == "true" ]]; then
-              echo "Triggering workflow for $repo"
+              echo "Triggering downstream workflow for $repo"
 
+              # Prepare JSON payload
               PAYLOAD=$(jq -n \
                 --arg name "$BASE_NAME" \
                 --arg sha "$BASE_SHA" \
                 '{base_image_name: $name,
                   base_image_sha: $sha}')
-              
-              gh api -X POST "/repos/$repo/dispatches" \
+
+              echo "$PAYLOAD" | gh api -X POST "/repos/$repo/dispatches" \
                 -H "Accept: application/vnd.github.v3+json" \
-                -H "Content-Type: application/json" \
-                -d "{\"event_type\": \"base-image-updated\", \"client_payload\": $PAYLOAD}"
+                --input - \
+                -F event_type=base-image-updated
             fi
           done
