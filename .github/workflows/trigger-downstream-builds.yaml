@@ -36,79 +36,95 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          echo "Searching for repos that use base image: \
-            ${{ github.event.inputs.base_image_name }}"
+          set -euo pipefail
 
-          # GitHub code search query to find Dockerfiles eferencing base image
-          QUERY="org:${{ github.repository_owner }} \
-            \"FROM us-central1-docker.pkg.dev/\
-            ${{ github.event.inputs.base_image_name }}\""
+          ORG="${{ github.repository_owner }}"
+          BASE_IMAGE="${{ github.event.inputs.base_image_name }}"
 
-          # Fetch repos dynamically
-          REPOS=$(gh api search/code -f q="$QUERY" \
-            --jq '.items[].repository.full_name' | sort -u)
+          echo "Listing repositories in $ORG..."
 
-          if [ -z "$REPOS" ]; then
-            echo "No downstream repos found using base image. \
-              Exiting."
+          REPOS=$(gh repo list "$ORG" \
+            --limit 500 \
+            --json nameWithOwner \
+            --jq '.[].nameWithOwner')
+
+          MATCHING_REPOS=""
+
+          for repo in $REPOS; do
+            echo "Checking $repo..."
+
+            # Try to fetch Dockerfile metadata first
+            if ! gh api "repos/$repo/contents/Dockerfile" >/dev/null 2>&1; then
+              echo "  No Dockerfile — skipping"
+              continue
+            fi
+
+            CONTENT=$(gh api "repos/$repo/contents/Dockerfile" \
+              --jq '.content' | base64 -d)
+
+            if echo "$CONTENT" | grep -q "$BASE_IMAGE"; then
+              echo "  Uses base image"
+              MATCHING_REPOS="$MATCHING_REPOS"$'\n'"$repo"
+            else
+              echo "  Dockerfile found but does not use base image"
+            fi
+          done
+
+          if [ -z "$MATCHING_REPOS" ]; then
+            echo "No downstream repos found."
             exit 0
           fi
 
           echo "Discovered repos:"
-          echo "$REPOS"
+          echo "$MATCHING_REPOS"
 
-          # Save discovered repos to GitHub Actions environment variable
-          echo "REPOS<<EOF" >> $GITHUB_ENV
-          echo "$REPOS" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          {
+            echo "REPOS<<EOF"
+            echo "$MATCHING_REPOS"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
 
       - name: Trigger downstream workflows
+        if: env.REPOS != ''
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          set -euo pipefail
+
+          TARGET="${{ github.event.inputs.target }}"
+          BASE_NAME="${{ github.event.inputs.base_image_name }}"
+          BASE_SHA="${{ github.event.inputs.base_image_sha }}"
+
           for repo in $REPOS; do
             NAME=$(basename "$repo")
 
-            if [[ "${{ github.event.inputs.target }}" == "base" ]]; then
-              if [[ "$NAME" =~ ^base-.*-image$ ]] && \
-                  [[ "$NAME" != "base-python-image" ]]; then
-                echo "Triggering BASE downstream workflow \
-                  for $repo"
+            SHOULD_TRIGGER=false
 
-                PAYLOAD=$(cat <<EOF
-                  {
-                    "base_image_name": \
-                      "${{ github.event.inputs.base_image_name }}",
-                    "base_image_sha": \
-                      "${{ github.event.inputs.base_image_sha }}",
-                    "workflow_type": "base"
-                  }
-                  EOF
-                )
-                gh api -X POST "/repos/$repo/dispatches" \
-                  -F event_type=update-base-image \
-                  -F client_payload="$PAYLOAD"
+            if [[ "$TARGET" == "base" ]]; then
+              if [[ "$NAME" =~ ^base-.*-image$ && "$NAME" != "base-python-image" ]]; then
+                SHOULD_TRIGGER=true
+                WORKFLOW_TYPE="base"
               fi
             fi
 
-            if [[ "${{ github.event.inputs.target }}" == "user" ]]; then
-              if [[ ! "$NAME" =~ ^base-.*-image$ ]]; then
-                echo "Triggering USER downstream workflow \
-                  for $repo"
+            if [[ "$TARGET" == "user" && \
+                  "$NAME" =~ -image && \
+                  ! "$NAME" =~ ^base-.*-image$ ]]; then
+              SHOULD_TRIGGER=true
+            fi
 
-                PAYLOAD=$(cat <<EOF
-                  {
-                    "base_image_name": \
-                      "${{ github.event.inputs.base_image_name }}",
-                    "base_image_sha": \
-                      "${{ github.event.inputs.base_image_sha }}",
-                    "workflow_type": "user"
-                  }
-                  EOF
-                )
-                gh api -X POST "/repos/$repo/dispatches" \
-                  -F event_type=update-base-image \
-                  -F client_payload="$PAYLOAD"
-              fi
+            if [[ "$SHOULD_TRIGGER" == "true" ]]; then
+              echo "Triggering $WORKFLOW_TYPE workflow for $repo"
+
+              PAYLOAD=$(jq -n \
+                --arg name "$BASE_NAME" \
+                --arg sha "$BASE_SHA" \
+                --arg type "$WORKFLOW_TYPE" \
+                '{base_image_name: $name,
+                  base_image_sha: $sha}')
+
+              gh api -X POST "/repos/$repo/dispatches" \
+                -F event_type=update-base-image \
+                -F client_payload="$PAYLOAD"
             fi
           done
