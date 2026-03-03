@@ -11,7 +11,9 @@ on:
           - base
           - user
       base_image_name:
-        description: "Base image name (e.g. ucb-datahub-2018/testing/base-python-image)"
+        description:
+          "Base image name (e.g.
+          ucb-datahub-2018/testing/base-python-image)"
         required: true
       base_image_sha:
         description: "Base image SHA/tag to propagate"
@@ -51,6 +53,8 @@ jobs:
 
           echo "Discovered repos:"
           echo "$REPOS"
+
+          # Save discovered repos to GitHub Actions environment variable
           echo "REPOS<<EOF" >> $GITHUB_ENV
           echo "$REPOS" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
@@ -60,16 +64,23 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           for repo in $REPOS; do
-            NAME=$(basename $repo)
+            NAME=$(basename "$repo")
 
             if [[ "${{ github.event.inputs.target }}" == "base" ]]; then
               if [[ "$NAME" =~ ^base-.*-image$ ]] && [[ "$NAME" != "base-python-image" ]]; then
                 echo "Triggering BASE downstream workflow for $repo"
 
-                gh api \
-                  -X POST /repos/$repo/dispatches \
+                PAYLOAD=$(cat <<EOF
+                  {
+                    "base_image_name": "${{ github.event.inputs.base_image_name }}",
+                    "base_image_sha": "${{ github.event.inputs.base_image_sha }}",
+                    "workflow_type": "base"
+                  }
+                  EOF
+                )
+                gh api -X POST "/repos/$repo/dispatches" \
                   -F event_type=update-base-image \
-                  -F client_payload="{\"base_image_name\":\"${{ github.event.inputs.base_image_name }}\",\"base_image_sha\":\"${{ github.event.inputs.base_image_sha }}\",\"workflow_type\":\"base\"}"
+                  -F client_payload="$PAYLOAD"
               fi
             fi
 
@@ -77,10 +88,17 @@ jobs:
               if [[ ! "$NAME" =~ ^base-.*-image$ ]]; then
                 echo "Triggering USER downstream workflow for $repo"
 
-                gh api \
-                  -X POST /repos/$repo/dispatches \
+                PAYLOAD=$(cat <<EOF
+                  {
+                    "base_image_name": "${{ github.event.inputs.base_image_name }}",
+                    "base_image_sha": "${{ github.event.inputs.base_image_sha }}",
+                    "workflow_type": "user"
+                  }
+                  EOF
+                )
+                gh api -X POST "/repos/$repo/dispatches" \
                   -F event_type=update-base-image \
-                  -F client_payload="{\"base_image_name\":\"${{ github.event.inputs.base_image_name }}\",\"base_image_sha\":\"${{ github.event.inputs.base_image_sha }}\",\"workflow_type\":\"user\"}"
+                  -F client_payload="$PAYLOAD"
               fi
             fi
           done

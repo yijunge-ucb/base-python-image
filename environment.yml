@@ -39,6 +39,5 @@ dependencies:
   # For https://github.com/berkeley-dsep-infra/datahub/issues/1846
   # Conda does not have these
   - pip:
-    - git-credential-helpers==0.2
-    - nbconvert[webpdf]==7.17.0
-
+      - git-credential-helpers==0.2
+      - nbconvert[webpdf]==7.17.0
