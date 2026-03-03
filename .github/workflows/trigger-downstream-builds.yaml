@@ -121,9 +121,10 @@ jobs:
                 --arg sha "$BASE_SHA" \
                 '{base_image_name: $name,
                   base_image_sha: $sha}')
-
+              
               gh api -X POST "/repos/$repo/dispatches" \
-                -F event_type=base-image-updated \
-                -F client_payload="$PAYLOAD"
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Content-Type: application/json" \
+                -d "{\"event_type\": \"base-image-updated\", \"client_payload\": $PAYLOAD}"
             fi
           done
