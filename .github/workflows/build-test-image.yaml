@@ -1,4 +1,4 @@
-name: Call Shared Build and Test Container Image Workflow 
+name: Call Shared Build and Test Container Image Workflow
 
 on:
   pull_request:
