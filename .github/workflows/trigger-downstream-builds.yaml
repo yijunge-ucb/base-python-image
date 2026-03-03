@@ -107,11 +107,10 @@ jobs:
               fi
             fi
 
-            if [[ "$TARGET" == "user" ]]; then
-              if [[ ! "$NAME" =~ ^base-.*-image$ ]]; then
-                SHOULD_TRIGGER=true
-                WORKFLOW_TYPE="user"
-              fi
+            if [[ "$TARGET" == "user" && \
+                  "$NAME" =~ -image && \
+                  ! "$NAME" =~ ^base-.*-image$ ]]; then
+              SHOULD_TRIGGER=true
             fi
 
             if [[ "$SHOULD_TRIGGER" == "true" ]]; then
@@ -122,8 +121,7 @@ jobs:
                 --arg sha "$BASE_SHA" \
                 --arg type "$WORKFLOW_TYPE" \
                 '{base_image_name: $name,
-                  base_image_sha: $sha,
-                  workflow_type: $type}')
+                  base_image_sha: $sha}')
 
               gh api -X POST "/repos/$repo/dispatches" \
                 -F event_type=update-base-image \
