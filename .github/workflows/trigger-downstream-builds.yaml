@@ -11,9 +11,7 @@ on:
           - base
           - user
       base_image_name:
-        description:
-          "Base image name (e.g.
-          ucb-datahub-2018/testing/base-python-image)"
+        description: "Base image name (e.g. ucb-datahub-2018/testing/base-python-image)"
         required: true
       base_image_sha:
         description: "Base image SHA/tag to propagate"
@@ -38,16 +36,21 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          echo "Searching for repos that use base image: ${{ github.event.inputs.base_image_name }}"
+          echo "Searching for repos that use base image: \
+            ${{ github.event.inputs.base_image_name }}"
 
-          # GitHub code search query to find Dockerfiles referencing base image
-          QUERY="org:${{ github.repository_owner }} \"FROM us-central1-docker.pkg.dev/${{ github.event.inputs.base_image_name }}\""
+          # GitHub code search query to find Dockerfiles eferencing base image
+          QUERY="org:${{ github.repository_owner }} \
+            \"FROM us-central1-docker.pkg.dev/\
+            ${{ github.event.inputs.base_image_name }}\""
 
           # Fetch repos dynamically
-          REPOS=$(gh api search/code -f q="$QUERY" --jq '.items[].repository.full_name' | sort -u)
+          REPOS=$(gh api search/code -f q="$QUERY" \
+            --jq '.items[].repository.full_name' | sort -u)
 
           if [ -z "$REPOS" ]; then
-            echo "No downstream repos found using base image. Exiting."
+            echo "No downstream repos found using base image. \
+              Exiting."
             exit 0
           fi
 
@@ -67,13 +70,17 @@ jobs:
             NAME=$(basename "$repo")
 
             if [[ "${{ github.event.inputs.target }}" == "base" ]]; then
-              if [[ "$NAME" =~ ^base-.*-image$ ]] && [[ "$NAME" != "base-python-image" ]]; then
-                echo "Triggering BASE downstream workflow for $repo"
+              if [[ "$NAME" =~ ^base-.*-image$ ]] && \
+                  [[ "$NAME" != "base-python-image" ]]; then
+                echo "Triggering BASE downstream workflow \
+                  for $repo"
 
                 PAYLOAD=$(cat <<EOF
                   {
-                    "base_image_name": "${{ github.event.inputs.base_image_name }}",
-                    "base_image_sha": "${{ github.event.inputs.base_image_sha }}",
+                    "base_image_name": \
+                      "${{ github.event.inputs.base_image_name }}",
+                    "base_image_sha": \
+                      "${{ github.event.inputs.base_image_sha }}",
                     "workflow_type": "base"
                   }
                   EOF
@@ -86,12 +93,15 @@ jobs:
 
             if [[ "${{ github.event.inputs.target }}" == "user" ]]; then
               if [[ ! "$NAME" =~ ^base-.*-image$ ]]; then
-                echo "Triggering USER downstream workflow for $repo"
+                echo "Triggering USER downstream workflow \
+                  for $repo"
 
                 PAYLOAD=$(cat <<EOF
                   {
-                    "base_image_name": "${{ github.event.inputs.base_image_name }}",
-                    "base_image_sha": "${{ github.event.inputs.base_image_sha }}",
+                    "base_image_name": \
+                      "${{ github.event.inputs.base_image_name }}",
+                    "base_image_sha": \
+                      "${{ github.event.inputs.base_image_sha }}",
                     "workflow_type": "user"
                   }
                   EOF
