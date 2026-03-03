@@ -39,8 +39,7 @@ jobs:
           echo "Searching for repos that use base image: \
             ${{ github.event.inputs.base_image_name }}"
 
-          # GitHub code search query to find Dockerfiles
-          # referencing base image
+          # GitHub code search query to find Dockerfiles eferencing base image
           QUERY="org:${{ github.repository_owner }} \
             \"FROM us-central1-docker.pkg.dev/\
             ${{ github.event.inputs.base_image_name }}\""
@@ -113,3 +112,4 @@ jobs:
               fi
             fi
           done
+          
