@@ -114,7 +114,7 @@ jobs:
             fi
 
             if [[ "$SHOULD_TRIGGER" == "true" ]]; then
-              echo "Triggering $WORKFLOW_TYPE workflow for $repo"
+              echo "Triggering workflow for $repo"
 
               PAYLOAD=$(jq -n \
                 --arg name "$BASE_NAME" \
