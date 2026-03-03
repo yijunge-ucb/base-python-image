@@ -4,7 +4,8 @@ channels:
 dependencies:
   # Items required for basic level functionality
   - gh-scoped-creds==4.1
-  # DH-418, bunch of stuff fails to install if git is set higher to this e.g. git==2.47.1
+  # DH-418, bunch of stuff fails to install if git is set
+  # higher to this e.g. git==2.47.1
   - git
   - jupyter-archive==3.4.0
   - jupyter-resource-usage==1.2.0
@@ -39,5 +40,5 @@ dependencies:
   # For https://github.com/berkeley-dsep-infra/datahub/issues/1846
   # Conda does not have these
   - pip:
-      - git-credential-helpers==0.2
-      - nbconvert[webpdf]==7.17.0
+    - git-credential-helpers==0.2
+    - nbconvert[webpdf]==7.17.0
