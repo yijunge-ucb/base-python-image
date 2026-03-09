@@ -112,3 +112,4 @@ ENV PATH=${CONDA_DIR}/bin:${CONDA_DIR}/envs/notebook/bin:${DEFAULT_PATH}
 # Cleanup temp files
 USER root
 RUN rm -rf /tmp/*
+
