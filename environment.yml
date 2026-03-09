@@ -4,6 +4,7 @@ channels:
 dependencies:
   # Items required for basic level functionality
   - gh-scoped-creds==4.1
+
   # DH-418, bunch of stuff fails to install if git is set
   # higher to this e.g. git==2.47.1
   - git
