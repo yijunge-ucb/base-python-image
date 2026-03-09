@@ -105,7 +105,7 @@ jobs:
             # Base repos
             if [[ "$TARGET" == "base" && "$NAME" =~ ^base-.*-image$ && "$NAME" != "base-python-image" ]]; then
               SHOULD_TRIGGER=true
-            fi 
+            fi
             # User repos
             if [[ "$TARGET" == "user" && "$NAME" =~ -image && ! "$NAME" =~ ^base-.*-image$ ]]; then
               SHOULD_TRIGGER=true
