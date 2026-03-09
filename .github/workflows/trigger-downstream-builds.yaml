@@ -31,7 +31,7 @@ jobs:
           app-id: ${{ vars.APP_ID }}
           private-key: ${{ secrets.PRIVATE_KEY_SECRET }}
           owner: ${{ github.repository_owner }}
-          
+
       - name: Discover repos using base image
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -86,42 +86,40 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_ENV"
 
-  
+
       - name: Trigger downstream workflows
         if: env.REPOS != ''
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
-      
+
           TARGET="${{ github.event.inputs.target }}"
           BASE_NAME="${{ github.event.inputs.base_image_name }}"
           BASE_SHA="${{ github.event.inputs.base_image_sha }}"
-      
+
           for repo in $REPOS; do
             NAME=$(basename "$repo")
             SHOULD_TRIGGER=false
-      
+
             # Base repos
             if [[ "$TARGET" == "base" && "$NAME" =~ ^base-.*-image$ && "$NAME" != "base-python-image" ]]; then
               SHOULD_TRIGGER=true
-            fi
-      
+            fi 
             # User repos
             if [[ "$TARGET" == "user" && "$NAME" =~ -image && ! "$NAME" =~ ^base-.*-image$ ]]; then
               SHOULD_TRIGGER=true
             fi
-      
+
             if [[ "$SHOULD_TRIGGER" == "true" ]]; then
               echo "Triggering downstream workflow for $repo"
-      
+
               # Full JSON body including event_type
               PAYLOAD=$(jq -n \
                 --arg name "$BASE_NAME" \
                 --arg sha "$BASE_SHA" \
                 '{event_type: "base-image-updated",
                   client_payload: {base_image_name: $name, base_image_sha: $sha}}')
-      
               # Post repository_dispatch
               echo "$PAYLOAD" | gh api -X POST "/repos/$repo/dispatches" \
                 -H "Accept: application/vnd.github.v3+json" \
