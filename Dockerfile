@@ -102,7 +102,15 @@ RUN mamba list -n notebook
 FROM base AS final
 
 USER root
+
 COPY --from=srv-conda /srv/conda /srv/conda
 RUN chown -R ${NB_USER}:${NB_USER} /srv/conda
+
+USER ${NB_USER}
+
+ENV PATH=${CONDA_DIR}/envs/notebook/bin:${CONDA_DIR}/bin:${DEFAULT_PATH}
+
+# Cleanup temp files
+USER root
 RUN rm -rf /tmp/*
 
