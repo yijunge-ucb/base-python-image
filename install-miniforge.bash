@@ -3,7 +3,7 @@
 set -ex
 
 cd $(dirname $0)
-MINIFORGE_VERSION='26.1.0-0'
+MINIFORGE_VERSION='26.3.2-0'
 
 URL="https://github.com/conda-forge/miniforge/releases/download/${MINIFORGE_VERSION}/Miniforge3-${MINIFORGE_VERSION}-Linux-x86_64.sh"
 INSTALLER_PATH=/tmp/miniforge-installer.sh
