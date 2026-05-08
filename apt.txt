@@ -7,6 +7,7 @@ rsync
 vim
 wget
 zip
+tar
 screen
 man
 man-db
