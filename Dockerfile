@@ -31,7 +31,29 @@ RUN apt-get -qq update --yes && \
     echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
     locale-gen
 
-RUN adduser --disabled-password --gecos "Default Jupyter user" ${NB_USER}
+RUN if getent group ${NB_UID}; then \
+      GROUP_1000="$(getent group ${NB_UID} | cut -d: -f1)"; \
+      if [ "$GROUP_1000" != "$NB_USER" ]; then \
+        groupmod --new-name ${NB_USER} "$GROUP_1000"; \
+      fi; \
+    else \
+      groupadd --gid ${NB_UID} ${NB_USER}; \
+    fi
+RUN if id ${NB_UID}; then \
+      USER_1000="$(id ${NB_UID} -un)"; \
+      if [ "$USER_1000" != "$NB_USER" ]; then \
+        usermod --home "/home/$NB_USER" --login "$NB_USER" --move-home "$USER_1000"; \
+      fi; \
+    else \
+      useradd \
+        --comment "Default user" \
+        --create-home \
+        --gid ${NB_UID} \
+        --no-log-init \
+        --shell /bin/bash \
+        --uid ${NB_UID} \
+        ${NB_USER}; \
+    fi
 
 # -------------------------------------------------------------------
 # Man pages
